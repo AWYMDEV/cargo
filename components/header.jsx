@@ -1,36 +1,39 @@
-// Импортируем Link для навигации и useAuth для получения сессии
 import Link from 'next/link'
 import { useAuth } from '../lib/auth'
 
 export default function Header() {
-  const { user } = useAuth() // Получаем текущего пользователя или null
+  const { user } = useAuth()
 
   return (
-    <header  className="bg-green-700 text-white shadow-md px-4 py-3 text-lg font-bold">
-      {/* Название/логотип слева */}
-      <h1 className="text-xl font-semibold text-gray-800">
-        Cargo MVP
-      </h1>
+    <header className="bg-green-700 text-white shadow-md px-6 py-4">
+      <div className="flex items-center justify-between w-full">
+        {/* Левый блок: логотип */}
+        <h1 className="text-xl font-bold text-white">
+          Cargo MVP
+        </h1>
 
-      {/* Справа — блок для авторизованного или гостя */}
-      {user ? (
-        <div className="flex items-center gap-4">
-          {/* Показываем email пользователя */}
-          <span className="text-gray-700 text-sm">
-            {user.email}
-          </span>
-
-          {/* Кнопка выхода */}
-          <Link href="/logout" className="text-red-600 hover:underline">
-            Выйти
+        {/* Правый блок: вход/выход */}
+        {user ? (
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-white/80">
+              {user.email}
+            </span>
+            <Link
+              href="/logout"
+              className="text-red-300 hover:text-red-100 text-sm font-medium"
+            >
+              Выйти
+            </Link>
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="text-green-200 hover:text-white text-sm font-medium"
+          >
+            Войти
           </Link>
-        </div> // Закрытие блока справа
-      ) : (
-        // Гость: кнопка входа
-        <Link href="/login" className="text-green-600 hover:underline">
-          Войти
-        </Link>
-      )}
-    </header> // Закрытие header
+        )}
+      </div>
+    </header>
   )
-} // Закрытие компонента Header
+}
