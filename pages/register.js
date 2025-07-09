@@ -1,153 +1,130 @@
-// Импортируем React-хуки и useState для управления состоянием
-import { useState } from 'react'
+// Импортируем хуки React
+import { useState } from 'react' // Хук состояния
+import { useRouter } from 'next/router' // Хук маршрутизации
+import { supabase } from '../lib/supabase' // Подключение клиента Supabase
 
-// Импортируем клиент Supabase
-import { supabase } from '../lib/supabase'
-import { useEffect } from 'react' // useEffect добавлен
-import { useRouter } from 'next/router' // Хук редиректа
-
-// Экспортируем компонент Register (страница регистрации)
+// Компонент страницы регистрации
 export default function Register() {
-  // Состояние для формы
-  const [fullName, setFullName] = useState('')       // Имя пользователя
-  const [email, setEmail] = useState('')             // Email
-  const [password, setPassword] = useState('')       // Пароль
-  const [confirmPassword, setConfirmPassword] = useState('') // Повтор пароля
-  const [showPassword, setShowPassword] = useState(false)    // Показывать пароль или нет
-  const [error, setError] = useState('')             // Ошибка
-  const [success, setSuccess] = useState('')         // Успех (для вывода сообщения)
-  const router = useRouter() // Получаем роутер для навигации
+  // Управление состоянием формы
+  const [fullName, setFullName] = useState('') // Имя
+  const [email, setEmail] = useState('') // Email
+  const [password, setPassword] = useState('') // Пароль
+  const [confirmPassword, setConfirmPassword] = useState('') // Подтверждение пароля
+  const [showPassword, setShowPassword] = useState(false) // Переключатель видимости пароля
+  const [error, setError] = useState('') // Сообщение об ошибке
+  const [success, setSuccess] = useState('') // Сообщение об успехе
 
+  const router = useRouter() // Для редиректа
 
-  // Функция регистрации при отправке формы
+  // Обработчик формы регистрации
   const handleRegister = async (e) => {
-    e.preventDefault() // Отменяем стандартную отправку формы
+    e.preventDefault() // Отмена перезагрузки страницы
 
-    setError('') // Сброс ошибки
-    setSuccess('') // Сброс успеха
-    if (error) {
-  setError(error.message) // Устанавливаем текст ошибки
-} else {
-  setSuccess('Письмо для подтверждения отправлено на почту.') // Успех
+    // Очистка предыдущих сообщений
+    setError('') // Очистка ошибки
+    setSuccess('') // Очистка успеха
 
-  // Очищаем поля
-  setFullName('')
-  setEmail('')
-  setPassword('')
-  setConfirmPassword('')
-
-  // Редирект на login через 3 секунды
-  setTimeout(() => {
-    router.push('/login') // Перенаправление
-  }, 3000) // 3000 мс = 3 сек
-}
-
-
-    // Проверка: пароли должны совпадать
+    // Проверка совпадения паролей
     if (password !== confirmPassword) {
-      setError('Пароли не совпадают') // Устанавливаем ошибку
-      return // Прерываем функцию
+      setError('Пароли не совпадают') // Если разные — выводим ошибку
+      return // Прерываем выполнение
     }
 
-    // Пытаемся зарегистрировать пользователя в Supabase
-    const { data, error } = await supabase.auth.signUp({
-      email, // Email из поля
-      password, // Пароль
+    // Пытаемся зарегистрировать пользователя
+    const { error } = await supabase.auth.signUp({
+      email, // Email из формы
+      password, // Пароль из формы
       options: {
         data: {
-          full_name: fullName, // Дополнительные метаданные: имя
-        }
-      }
+          full_name: fullName, // Дополнительное поле: имя
+        },
+      },
     })
 
-    // Если есть ошибка — выводим её
+    // Обработка ответа
     if (error) {
-      setError(error.message) // Устанавливаем текст ошибки
+      setError(error.message) // Выводим сообщение об ошибке
     } else {
-      setSuccess('Письмо для подтверждения отправлено на почту.') // Успешная регистрация
-      setFullName('') // Очищаем поля
+      setSuccess('Письмо для подтверждения отправлено на почту.') // Выводим сообщение об успехе
+
+      // Очищаем поля формы
+      setFullName('')
       setEmail('')
       setPassword('')
       setConfirmPassword('')
-    }
-  } // Закрытие функции handleRegister
 
-  // Возвращаем JSX разметку
+      // Ждём 3 секунды и редиректим на login
+      setTimeout(() => {
+        router.push('/login') // Переход на страницу входа
+      }, 3000) // Через 3 секунды (3000 мс)
+    }
+  } // Закрытие handleRegister
+
+  // Возврат JSX
   return (
     <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded shadow">
+      {/* Заголовок */}
       <h2 className="text-2xl font-bold mb-4 text-center text-green-700">
-        Регистрация {/* Заголовок */}
+        Регистрация
       </h2>
 
-      {/* Форма регистрации */}
+      {/* Форма */}
       <form onSubmit={handleRegister} className="space-y-4">
-        {/* Поле для имени */}
+        {/* Поле имя */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Имя
-          </label>
+          <label className="block text-sm font-medium text-gray-700">Имя</label>
           <input
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             required
-           className="w-full rounded px-3 py-2 mt-1 bg-gray-100 text-black placeholder-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-
+            className="w-full rounded px-3 py-2 mt-1 bg-gray-100 text-black placeholder-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
           />
         </div>
 
-        {/* Поле Email */}
+        {/* Поле email */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Email
-          </label>
+          <label className="block text-sm font-medium text-gray-700">Email</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-           className="w-full rounded px-3 py-2 mt-1 bg-gray-100 text-black placeholder-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-
+            className="w-full rounded px-3 py-2 mt-1 bg-gray-100 text-black placeholder-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
           />
         </div>
 
-        {/* Поле Пароль */}
+        {/* Поле пароль */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Пароль
-          </label>
+          <label className="block text-sm font-medium text-gray-700">Пароль</label>
           <input
-            type={showPassword ? 'text' : 'password'} // Переключение видимости
+            type={showPassword ? 'text' : 'password'} // Скрытие или показ пароля
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             className="w-full rounded px-3 py-2 mt-1 bg-gray-100 text-black placeholder-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-
           />
         </div>
 
-        {/* Поле Повтор пароля */}
+        {/* Поле подтверждение пароля */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Повторите пароль
-          </label>
+          <label className="block text-sm font-medium text-gray-700">Повторите пароль</label>
           <input
-            type={showPassword ? 'text' : 'password'} // Тот же переключатель
+            type={showPassword ? 'text' : 'password'} // То же отображение
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
             className="w-full rounded px-3 py-2 mt-1 bg-gray-100 text-black placeholder-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-
           />
         </div>
 
-        {/* Кнопка "Показать пароль" */}
+        {/* Чекбокс показать пароль */}
         <div className="flex items-center">
           <input
             type="checkbox"
             id="showPassword"
             checked={showPassword}
-            onChange={() => setShowPassword(!showPassword)} // Инвертируем значение
+            onChange={() => setShowPassword(!showPassword)} // Инвертируем флаг
             className="mr-2"
           />
           <label htmlFor="showPassword" className="text-sm text-gray-700">
@@ -155,19 +132,11 @@ export default function Register() {
           </label>
         </div>
 
-        {/* Сообщение об ошибке */}
-        {error && (
-          <p className="text-red-600 text-sm">
-            {error}
-          </p>
-        )}
+        {/* Вывод ошибки */}
+        {error && <p className="text-red-600 text-sm">{error}</p>}
 
-        {/* Сообщение об успехе */}
-        {success && (
-          <p className="text-green-600 text-sm">
-            {success}
-          </p>
-        )}
+        {/* Вывод успеха */}
+        {success && <p className="text-green-600 text-sm">{success}</p>}
 
         {/* Кнопка отправки */}
         <button
@@ -177,6 +146,6 @@ export default function Register() {
           Зарегистрироваться
         </button>
       </form> {/* Закрытие формы */}
-    </div> // Закрытие div обёртки
+    </div> // Закрытие div-обёртки
   )
-} // Закрытие компонента Register
+} // Конец компонента Register
