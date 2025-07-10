@@ -17,7 +17,7 @@ export default function App({ Component, pageProps }) {
         router.replace("/reset-password" + hash);  // Сохраняем токен в хеше
       }
     }
-  }, []);
+  }, [router]);
 
   return (
     <Layout>
