@@ -78,6 +78,12 @@ export default function LoginPage() {
           >
             Войти
           </button>
+          <div className="text-center mt-4">
+  <a href="/forgot-password" className="text-sm text-green-600 hover:underline">
+    Забыли пароль?
+  </a>
+</div>
+
         </form>
 
         {/* Ссылка на регистрацию */}
