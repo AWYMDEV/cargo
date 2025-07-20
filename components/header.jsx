@@ -1,53 +1,110 @@
-// Импортируем Link из Next.js для навигации между страницами
+// 📄 Файл: /components/Header.jsx
+
+// Импорт компонента Link из Next.js для переходов между страницами
 import Link from 'next/link'
 
-// Импортируем кастомный хук useAuth из нашей папки lib
+// Импорт пользовательского хука авторизации, который предоставляет объект user
 import { useAuth } from '../lib/auth'
 
-// Экспортируем компонент Header (шапка сайта)
+// Импорт хуков состояния и эффекта из React
+import { useEffect, useState } from 'react'
+
+// Импорт хука маршрутизации из Next.js
+import { useRouter } from 'next/router'
+
+// Импорт клиента Supabase для работы с базой данных
+import { supabase } from '../lib/supabase'
+
+// Экспорт основного компонента Header
 export default function Header() {
-  // Получаем объект user из хука useAuth (будет null, если пользователь не авторизован)
+  // Получаем объект пользователя из кастомного хука авторизации
   const { user } = useAuth()
 
-  // Возвращаем JSX разметку хедера
+  // Состояния для проверки наличия профилей
+  const [hasCarrier, setHasCarrier] = useState(false)
+  const [hasShipper, setHasShipper] = useState(false)
+
+  // Инициализируем маршрутизатор Next.js
+  const router = useRouter()
+
+  // Проверка наличия профилей
+  useEffect(() => {
+    if (!user) return
+
+    const checkProfiles = async () => {
+      const { data: carrier } = await supabase
+        .from('carrier_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      const { data: shipper } = await supabase
+        .from('shipper_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      setHasCarrier(!!carrier)
+      setHasShipper(!!shipper)
+    }
+
+    checkProfiles()
+  }, [user])
+
+  const handleBecome = (role) => {
+    router.push(`/onboarding/profile?role=${role}`)
+  }
+
   return (
-    // Обёртка: фон зелёный, текст белый, тень, внутренние отступы
     <header className="bg-green-700 text-white shadow-md px-6 py-4">
-      {/* Flex контейнер, выравнивает логотип и правую часть по краям, по горизонтали */}
       <div className="flex items-center justify-between w-full">
-        
-        {/* Левая часть — логотип сайта */}
         <h1 className="text-xl font-bold text-white">
-          Cargo MVP {/* Название проекта */}
-        </h1> {/* Закрытие тега h1 */}
+          <a href='/'>Cargo MVP</a>
+        </h1>
 
-        {/* Правая часть — вход/выход */}
         {
-          user ? ( // Если пользователь авторизован
+          user ? (
             <div className="flex items-center gap-4">
-              {/* Отображаем email пользователя, немного прозрачный */}
+              {
+                !hasCarrier && (
+                  <button
+                    onClick={() => handleBecome('carrier')}
+                    className="bg-white text-green-700 px-3 py-1 rounded hover:bg-green-200 text-sm"
+                  >
+                    Я — перевозчик
+                  </button>
+                )
+              }
+              {
+                !hasShipper && (
+                  <button
+                    onClick={() => handleBecome('shipper')}
+                    className="bg-white text-green-700 px-3 py-1 rounded hover:bg-green-200 text-sm"
+                  >
+                    Я — отправитель
+                  </button>
+                )
+              }
               <span className="text-sm text-white/80">
-                {user.email} {/* Подставляется email */}
-              </span> {/* Закрытие тега span */}
-
-              {/* Кнопка выхода — ссылка на страницу logout */}
+                {user.user_metadata?.full_name || user.email}
+              </span>
               <Link
-                href="/logout" // Путь к странице logout
+                href="/logout"
                 className="text-red-300 hover:text-red-100 text-sm font-medium"
               >
-                Выйти {/* Текст кнопки */}
-              </Link> {/* Закрытие тега Link */}
-            </div> // Закрытие div с кнопкой и email
-          ) : ( // Иначе — если пользователь НЕ авторизован
+                Выйти
+              </Link>
+            </div>
+          ) : (
             <Link
-              href="/login" // Путь к странице входа
+              href="/login"
               className="text-green-200 hover:text-white text-sm font-medium"
             >
-              Войти {/* Текст ссылки входа */}
-            </Link> // Закрытие тега Link
+              Войти
+            </Link>
           )
-        } 
-      </div> {/* Закрытие flex-обёртки */}
-    </header> // Закрытие header
+        }
+      </div>
+    </header>
   )
-} // Закрытие компонента Header
+}
