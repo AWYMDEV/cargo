@@ -12,8 +12,8 @@
 }
 
 /* Универсальный стиль кнопки */
-.btn {
-  @apply bg-green-700 hover:bg-green-800 text-white font-semibold py-2 px-4 rounded transition;
+.btn, .btn-primary {
+  @apply bg-gradient-to-b from-[#1E9FFF] to-[#006DFF] hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg transition;
 }
 
 body {
@@ -21,3 +21,4 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+ 
