@@ -8,6 +8,9 @@ import { supabase } from "../lib/supabase";
 export default function Register() {
   const router = useRouter();
 
+  //popup modal page
+const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+
   // Шаги
   const [step, setStep] = useState(1);
 
@@ -82,25 +85,67 @@ export default function Register() {
   const prevStep = () => setStep((prev) => prev - 1);
 
   // Отправка формы
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+const handleRegister = async (e) => {
+  e.preventDefault();
+  setError("");
+  setSuccess("");
 
-    // Тут регистрация в Supabase или Firebase
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName, role } },
-    });
+  // 1. Регистрируем пользователя
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: fullName, role } },
+  });
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess("Регистрация успешна!");
-      setTimeout(() => router.push("/login"), 3000);
-    }
-  };
+  if (error) {
+    setError(error.message);
+    return;
+  }
+
+  const user = data.user;
+  if (!user) {
+    setError("Не удалось создать пользователя");
+    return;
+  }
+
+  // 2. Создаём запись в user_roles
+  const { data: userRole, error: roleError } = await supabase
+    .from("user_roles")
+    .insert([
+      {
+        user_id: user.id,
+        role: role,
+        status: "pending",
+      },
+    ])
+    .select()
+    .single();
+
+  if (roleError) {
+    setError("Ошибка при создании роли: " + roleError.message);
+    return;
+  }
+
+  // 3. Создаём запись в role_profiles
+  const { error: profileError } = await supabase.from("role_profiles").insert([
+    {
+      user_role_id: userRole.id,
+      company_name: hasCompany ? companyName : null,
+      phone: phone,
+      documents_url: null, // позже добавим загрузку документов
+      status: "pending",
+    },
+  ]);
+
+  if (profileError) {
+    setError("Ошибка при создании профиля: " + profileError.message);
+    return;
+  }
+
+  // 4. Показываем popup успеха
+  setShowSuccessPopup(true);
+};
+
 
   // Прогрессбар
 // Прогресс-бар
@@ -116,9 +161,9 @@ const renderProgress = () => {
             className={`w-10 h-10 flex items-center justify-center rounded-full border-2 text-sm font-bold
               ${
                 s < step
-                  ? "bg-blue-600 border-blue-600 text-white" // прошедший шаг
+                  ? "bg-[#006BFF] border-[#006BFF] text-white" // прошедший шаг
                   : s === step
-                  ? "border-blue-600 text-blue-600 bg-white" // активный шаг
+                  ? "border-[#006BFF] text-[#006BFF] bg-white" // активный шаг
                   : "border-gray-300 text-gray-400 bg-white" // будущий шаг
               }`}
           >
@@ -129,7 +174,7 @@ const renderProgress = () => {
           {i < steps.length - 1 && (
             <div
               className={`h-0.5 w-12 mx-2 ${
-                s < step ? "bg-blue-600" : "bg-gray-300"
+                s < step ? "bg-[#006BFF]" : "bg-gray-300"
               }`}
             ></div>
           )}
@@ -151,8 +196,8 @@ const renderProgress = () => {
       onClick={() => setRole(value)}
       className={`cursor-pointer p-4 border rounded-lg text-center transition ${
         role === value
-          ? "bg-blue-600 text-white border-blue-600"
-          : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
+          ? "bg-[#006BFF] text-white border-[#006BFF]"
+          : "bg-white text-gray-700 border-gray-300 hover:border-[#006BFF]"
       }`}
     >
       {label}
@@ -161,47 +206,66 @@ const renderProgress = () => {
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow">
-      <h2 className="text-2xl font-bold mb-4 text-center text-blue-600">
+      <h2 className="text-2xl font-bold mb-4 text-center text-[#006BFF]">
         Регистрация
       </h2>
 
-      {renderProgress()}
 
+
+      {renderProgress()}
+<div className="text-center mb-6">
+  {step === 1 && (
+    <h3 className="text-lg font-semibold text-gray-700">
+      Введите контактные данные
+    </h3>
+  )}
+  {step === 2 && (
+    <h3 className="text-lg font-semibold text-gray-700">
+      Выберите роль
+    </h3>
+  )}
+  {step === 3 && (
+    <h3 className="text-lg font-semibold text-gray-700">
+      Укажите дополнительную информацию
+    </h3>
+  )}
+</div>
       <form onSubmit={handleRegister} className="space-y-4">
         {/* Шаг 1 */}
         {step === 1 && (
+          
           <>
             <input
               type="tel"
               placeholder="Телефон"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
+              className="input"
             />
             <input
               type="email"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
+              className="input"
             />
             <input
               type="password"
               placeholder="Пароль"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
+              className="input"
             />
             <input
               type="password"
               placeholder="Повторите пароль"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
+              className="input"
             />
             <p className="text-sm mt-2">
               Уже есть аккаунт?{" "}
-              <Link href="/login" className="text-blue-600 underline">
+              <Link href="/login" className="text-[#006BFF] underline">
                 Войдите
               </Link>
             </p>
@@ -225,21 +289,21 @@ const renderProgress = () => {
               placeholder="ФИО"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
+              className="input"
             />
             <input
               type="text"
               placeholder="Город"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
+              className="input"
             />
             <input
               type="text"
               placeholder="Страна"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
+              className="input"
             />
 
             {/* Переключатель: есть ли компания */}
@@ -260,21 +324,21 @@ const renderProgress = () => {
                   placeholder="Название компании"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full border px-3 py-2 rounded-lg"
+                  className="input"
                 />
                 <input
                   type="text"
                   placeholder="Адрес компании"
                   value={companyAddress}
                   onChange={(e) => setCompanyAddress(e.target.value)}
-                  className="w-full border px-3 py-2 rounded-lg"
+                  className="input"
                 />
                 <input
                   type="text"
                   placeholder="ZIP"
                   value={companyZip}
                   onChange={(e) => setCompanyZip(e.target.value)}
-                  className="w-full border px-3 py-2 rounded-lg"
+                  className="input"
                 />
               </div>
             )}
@@ -310,7 +374,7 @@ const renderProgress = () => {
             <button
               type="button"
               onClick={nextStep}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 ml-auto"
+              className="btn-primary"
             >
               Далее →
             </button>
@@ -318,13 +382,49 @@ const renderProgress = () => {
           {step === 3 && (
             <button
               type="submit"
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg ml-auto hover:bg-blue-700"
+              className="btn-primary"
             >
               Зарегистрироваться
             </button>
           )}
         </div>
       </form>
+      {showSuccessPopup && (
+  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+    <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-sm w-full">
+      {/* Галочка */}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="mx-auto mb-4"
+        width="64"
+        height="64"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="green"
+        strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+
+      {/* Текст */}
+      <h3 className="text-xl font-semibold text-green-700 mb-2">
+        Регистрация успешна!
+      </h3>
+      <p className="text-gray-600 text-sm mb-4">
+        Проверьте вашу почту для подтверждения аккаунта.
+      </p>
+
+      {/* Кнопка перехода */}
+      <button
+        onClick={() => router.push("/login")}
+        className="btn-primary"
+      >
+        Перейти к входу
+      </button>
+    </div>
+  </div>
+)}
+
     </div>
   );
 }

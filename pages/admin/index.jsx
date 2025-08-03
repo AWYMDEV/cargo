@@ -13,7 +13,7 @@ const AdminPage = () => {
   // список разрешённых email для админов
   const adminEmails = [
     "admin1@cargo.com",
-     
+     "sulton@boy.tj",
     "moderator@cargo.com",
     // добавь нужные email сюда
   ];

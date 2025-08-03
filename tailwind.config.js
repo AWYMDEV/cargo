@@ -1,3 +1,4 @@
+/* eslint-disable import/no-anonymous-default-export */
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -11,3 +12,12 @@ module.exports = {
   },
   plugins: [],
 }
+export default {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#006BFF',
+      },
+    },
+  },
+};

@@ -56,7 +56,7 @@ export default function Header() {
   }
 
   return (
-    <header className="bg-green-700 text-white shadow-md px-6 py-4">
+    <header className="bg-[#006BFF] text-white shadow-md px-6 py-4">
       <div className="flex items-center justify-between w-full">
         <h1 className="text-xl font-bold text-white">
           <a href='/'>Cargo MVP</a>
@@ -69,7 +69,7 @@ export default function Header() {
                 !hasCarrier && (
                   <button
                     onClick={() => handleBecome('carrier')}
-                    className="bg-white text-green-700 px-3 py-1 rounded hover:bg-green-200 text-sm"
+                    className="bg-white text-[#006BFF] px-3 py-1 rounded hover:bg-green-200 text-sm"
                   >
                     Я — перевозчик
                   </button>
@@ -79,7 +79,7 @@ export default function Header() {
                 !hasShipper && (
                   <button
                     onClick={() => handleBecome('shipper')}
-                    className="bg-white text-green-700 px-3 py-1 rounded hover:bg-green-200 text-sm"
+                    className="bg-white text-[#006BFF] px-3 py-1 rounded hover:bg-green-200 text-sm"
                   >
                     Я — отправитель
                   </button>

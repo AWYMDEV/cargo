@@ -1,10 +1,10 @@
 // components/AdminTabs.jsx
-import RoleRequestsTable from "./roleRequestsTable";
-
+import RoleRequestsTable from "./roleRequestsTable"; // таблица заявок на роли
+import RoleProfilesTable from "./RoleProfilesTable"; // НОВАЯ таблица профилей
 import { useState } from "react"; // хук состояния
 
 const AdminTabs = () => {
-  // Список вкладок и их метки
+  // Список вкладок
   const tabs = [
     { key: "roles", label: "Роли пользователей" },
     { key: "profiles", label: "Профили" },
@@ -12,22 +12,20 @@ const AdminTabs = () => {
     { key: "shipments", label: "Грузы" },
   ];
 
-  // Состояние активной вкладки
+  // Активная вкладка
   const [activeTab, setActiveTab] = useState("roles");
 
-  // Рендер содержимого по выбранной вкладке
+  // Что рендерить внутри
   const renderTabContent = () => {
     switch (activeTab) {
       case "roles":
-       
-  return <RoleRequestsTable />;
-
+        return <RoleRequestsTable />;
       case "profiles":
-        return <p> Профили ролей</p>;
+        return <RoleProfilesTable />; // заменили заглушку на компонент
       case "trucks":
-        return <p>  Машины</p>;
+        return <p>Машины</p>; // заглушка, позже сделаем таблицу
       case "shipments":
-        return <p>  Грузы</p>;
+        return <p>Грузы</p>; // заглушка, позже сделаем таблицу
       default:
         return null;
     }
@@ -35,17 +33,17 @@ const AdminTabs = () => {
 
   return (
     <div style={{ marginTop: "20px" }}>
-      {/* Вкладки */}
+      {/* Кнопки вкладок */}
       <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)} // смена вкладки
+            onClick={() => setActiveTab(tab.key)}
             style={{
               padding: "8px 16px",
               border: "1px solid #ccc",
               borderRadius: "6px",
-              backgroundColor: activeTab === tab.key ? "#28a745" : "#f0f0f0",
+              backgroundColor: activeTab === tab.key ? "#006BFF" : "#f0f0f0",
               color: activeTab === tab.key ? "white" : "black",
               cursor: "pointer",
             }}
@@ -63,4 +61,4 @@ const AdminTabs = () => {
   );
 };
 
-export default AdminTabs; // экспорт компонента
+export default AdminTabs;
