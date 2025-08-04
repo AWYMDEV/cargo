@@ -6,36 +6,36 @@ const RoleProfilesTable = () => {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Фильтры
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  // Сортировка
   const [sortField, setSortField] = useState("created_at");
   const [sortOrder, setSortOrder] = useState("desc");
 
-  // Popup
   const [confirmAction, setConfirmAction] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
 
-  // Получаем данные из view
+  // Загружаем данные из нового VIEW
   const fetchProfiles = async () => {
     const { data, error } = await supabase
-      .from("role_profiles_with_email")
+      .from("profiles_full_view")
       .select("*");
 
-    if (!error) {
-      setProfiles(data);
-    } else {
-      console.error("Ошибка при загрузке профилей:", error);
-    }
-
+    if (!error) setProfiles(data);
     setLoading(false);
   };
 
   // Обновление статуса
   const updateStatus = async (status) => {
     await supabase.from("role_profiles").update({ status }).eq("id", selectedId);
+    setConfirmAction(null);
+    setSelectedId(null);
+    fetchProfiles();
+  };
+
+  // Удаление профиля
+  const deleteProfile = async () => {
+    await supabase.from("role_profiles").delete().eq("id", selectedId);
     setConfirmAction(null);
     setSelectedId(null);
     fetchProfiles();
@@ -59,7 +59,6 @@ const RoleProfilesTable = () => {
       return 0;
     });
 
-  // Смена порядка сортировки
   const handleSort = (field) => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -109,25 +108,27 @@ const RoleProfilesTable = () => {
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-[#006BFF] text-white">
-              <th className="p-3 text-left">№</th>
-              <th className="p-3 text-left">Роль</th>
+              <th className="p-3 text-left w-12">№</th>
+              <th className="p-3 text-left w-28">Роль</th>
               <th
-                className="p-3 text-left cursor-pointer"
+                className="p-3 text-left w-56 cursor-pointer"
                 onClick={() => handleSort("full_name")}
               >
                 Имя {sortField === "full_name" && (sortOrder === "asc" ? "↑" : "↓")}
               </th>
-              <th className="p-3 text-left">Email</th>
-              <th className="p-3 text-left">Телефон</th>
-              <th className="p-3 text-left">Статус</th>
+              <th className="p-3 text-left w-40">Email</th>
+              <th className="p-3 text-left w-32">Телефон</th>
+              <th className="p-3 text-left w-32">Компания</th>
+              <th className="p-3 text-left w-32">Документы</th>
+              <th className="p-3 text-left w-28">Статус</th>
               <th
-                className="p-3 text-left cursor-pointer"
+                className="p-3 text-left w-32 cursor-pointer"
                 onClick={() => handleSort("created_at")}
               >
-                Дата регистрации{" "}
+                Дата создания{" "}
                 {sortField === "created_at" && (sortOrder === "asc" ? "↑" : "↓")}
               </th>
-              <th className="p-3 text-center">Действия</th>
+              <th className="p-3 text-center w-40">Действия</th>
             </tr>
           </thead>
           <tbody>
@@ -141,6 +142,21 @@ const RoleProfilesTable = () => {
                 <td className="p-3 border-b">{p.full_name}</td>
                 <td className="p-3 border-b">{p.email}</td>
                 <td className="p-3 border-b">{p.phone || "—"}</td>
+                <td className="p-3 border-b">{p.company_name || "—"}</td>
+                <td className="p-3 border-b">
+                  {p.documents_url ? (
+                    <a
+                      href={p.documents_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#006BFF] underline"
+                    >
+                      Открыть
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td
                   className={`p-3 border-b font-medium ${
                     p.status === "approved"
@@ -172,13 +188,21 @@ const RoleProfilesTable = () => {
                           setSelectedId(p.id);
                           setConfirmAction("reject");
                         }}
-                        className="px-3 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+                        className="px-3 py-1 mr-2 rounded bg-red-500 text-white hover:bg-red-600"
                       >
                         Отклонить
                       </button>
                     </>
                   ) : (
-                    "—"
+                    <button
+                      onClick={() => {
+                        setSelectedId(p.id);
+                        setConfirmAction("delete");
+                      }}
+                      className="px-3 py-1 rounded bg-gray-400 text-white hover:bg-gray-500"
+                    >
+                      Удалить профиль
+                    </button>
                   )}
                 </td>
               </tr>
@@ -193,9 +217,17 @@ const RoleProfilesTable = () => {
           message={
             confirmAction === "approve"
               ? "Подтвердить профиль?"
-              : "Отклонить профиль?"
+              : confirmAction === "reject"
+              ? "Отклонить профиль?"
+              : "Удалить профиль?"
           }
-          onConfirm={() => updateStatus(confirmAction === "approve" ? "approved" : "rejected")}
+          onConfirm={() =>
+            confirmAction === "approve"
+              ? updateStatus("approved")
+              : confirmAction === "reject"
+              ? updateStatus("rejected")
+              : deleteProfile()
+          }
           onCancel={() => {
             setConfirmAction(null);
             setSelectedId(null);

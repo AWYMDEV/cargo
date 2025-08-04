@@ -6,7 +6,7 @@ import { useState } from "react"; // хук состояния
 const AdminTabs = () => {
   // Список вкладок
   const tabs = [
-    { key: "roles", label: "Роли пользователей" },
+    { key: "roles", label: "Пользователи" },
     { key: "profiles", label: "Профили" },
     { key: "trucks", label: "Машины" },
     { key: "shipments", label: "Грузы" },
