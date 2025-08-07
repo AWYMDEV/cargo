@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
+import withGuestRedirect from "../components/withGuestRedirect";
+ 
 
-export default function Register() {
+function Register() {
   const router = useRouter();
 
   //popup modal page
@@ -428,3 +430,5 @@ const renderProgress = () => {
     </div>
   );
 }
+
+export default withGuestRedirect(Register);

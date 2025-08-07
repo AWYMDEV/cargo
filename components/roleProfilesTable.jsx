@@ -15,12 +15,12 @@ const RoleProfilesTable = () => {
   const [confirmAction, setConfirmAction] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
 
-  // Загружаем данные из нового VIEW
-  const fetchProfiles = async () => {
-    const { data, error } = await supabase
-      .from("profiles_full_view")
-      .select("*");
+  const [expandedRow, setExpandedRow] = useState(null); // раскрытая строка
+  const [popupImage, setPopupImage] = useState(null); // для увеличенного фото
 
+  // Загрузка данных
+  const fetchProfiles = async () => {
+    const { data, error } = await supabase.from("profiles_full_view").select("*");
     if (!error) setProfiles(data);
     setLoading(false);
   };
@@ -74,6 +74,16 @@ const RoleProfilesTable = () => {
 
   if (loading) return <p className="text-gray-600 text-center py-6">Загрузка...</p>;
 
+  // Парсим JSON документов (с защитой от null)
+  const parseDocuments = (docStr) => {
+    if (!docStr) return {};
+    try {
+      return JSON.parse(docStr);
+    } catch {
+      return {};
+    }
+  };
+
   return (
     <div>
       <h2 className="text-2xl font-bold mb-4 text-[#006BFF]">📄 Профили ролей</h2>
@@ -119,8 +129,6 @@ const RoleProfilesTable = () => {
               <th className="p-3 text-left w-40">Email</th>
               <th className="p-3 text-left w-32">Телефон</th>
               <th className="p-3 text-left w-32">Компания</th>
-              <th className="p-3 text-left w-32">Документы</th>
-              <th className="p-3 text-left w-28">Статус</th>
               <th
                 className="p-3 text-left w-32 cursor-pointer"
                 onClick={() => handleSort("created_at")}
@@ -128,88 +136,171 @@ const RoleProfilesTable = () => {
                 Дата создания{" "}
                 {sortField === "created_at" && (sortOrder === "asc" ? "↑" : "↓")}
               </th>
+              <th className="p-3 text-left w-28">Статус</th>
               <th className="p-3 text-center w-40">Действия</th>
             </tr>
           </thead>
           <tbody>
-            {sortedProfiles.map((p, index) => (
-              <tr
-                key={p.id}
-                className={`${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}
-              >
-                <td className="p-3 border-b text-center">{index + 1}</td>
-                <td className="p-3 border-b capitalize">{p.role}</td>
-                <td className="p-3 border-b">{p.full_name}</td>
-                <td className="p-3 border-b">{p.email}</td>
-                <td className="p-3 border-b">{p.phone || "—"}</td>
-                <td className="p-3 border-b">{p.company_name || "—"}</td>
-                <td className="p-3 border-b">
-                  {p.documents_url ? (
-                    <a
-                      href={p.documents_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#006BFF] underline"
+            {sortedProfiles.map((p, index) => {
+              const documents = parseDocuments(p.documents_url);
+
+              return (
+                <>
+                  <tr
+                    key={p.id}
+                    className={`cursor-pointer ${
+                      index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                    } hover:bg-gray-100`}
+                    onClick={() =>
+                      setExpandedRow(expandedRow === p.id ? null : p.id)
+                    }
+                  >
+                    <td className="p-3 border-b text-center">{index + 1}</td>
+                    <td className="p-3 border-b capitalize">{p.role}</td>
+                    <td className="p-3 border-b">{p.full_name}</td>
+                    <td className="p-3 border-b">{p.email}</td>
+                    <td className="p-3 border-b">{p.phone || "—"}</td>
+                    <td className="p-3 border-b">{p.company_name || "—"}</td>
+                    <td className="p-3 border-b">
+                      {new Date(p.created_at).toLocaleDateString()}
+                    </td>
+                    <td
+                      className={`p-3 border-b font-medium ${
+                        p.status === "approved"
+                          ? "text-green-600"
+                          : p.status === "rejected"
+                          ? "text-red-600"
+                          : "text-gray-600"
+                      }`}
                     >
-                      Открыть
-                    </a>
-                  ) : (
-                    "—"
+                      {p.status}
+                    </td>
+                    <td className="p-3 border-b text-center">
+                      {p.status === "pending" ? (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedId(p.id);
+                              setConfirmAction("approve");
+                            }}
+                            className="px-3 py-1 mr-2 rounded bg-green-500 text-white hover:bg-green-600"
+                          >
+                            Одобрить
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedId(p.id);
+                              setConfirmAction("reject");
+                            }}
+                            className="px-3 py-1 mr-2 rounded bg-red-500 text-white hover:bg-red-600"
+                          >
+                            Отклонить
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedId(p.id);
+                            setConfirmAction("delete");
+                          }}
+                          className="px-3 py-1 rounded bg-gray-400 text-white hover:bg-gray-500"
+                        >
+                          Удалить
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* Раскрытая строка */}
+                  {expandedRow === p.id && (
+                    <tr>
+                      <td colSpan="9" className="p-4 bg-gray-100 border">
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Текстовые данные */}
+                          <div>
+                            <h3 className="font-bold mb-2">Детали профиля</h3>
+                            <p><b>USDOT:</b> {documents?.usd_ot_number || "-"}</p>
+                            <p><b>MC Number:</b> {documents?.mc_number || "-"}</p>
+                            <p><b>Лицензия:</b> {documents?.license || "-"}</p>
+                          </div>
+
+                          {/* Фото */}
+                          <div>
+                            <h3 className="font-bold mb-2">Документы</h3>
+                            <div className="flex gap-2 flex-wrap">
+                              {documents?.passport_front && (
+                                <img
+                                  src={documents.passport_front}
+                                  alt="Passport Front"
+                                  className="w-20 h-20 object-cover rounded cursor-pointer"
+                                  onClick={() => setPopupImage(documents.passport_front)}
+                                />
+                              )}
+                              {documents?.passport_back && (
+                                <img
+                                  src={documents.passport_back}
+                                  alt="Passport Back"
+                                  className="w-20 h-20 object-cover rounded cursor-pointer"
+                                  onClick={() => setPopupImage(documents.passport_back)}
+                                />
+                              )}
+                              {documents?.selfie && (
+                                <img
+                                  src={documents.selfie}
+                                  alt="Selfie"
+                                  className="w-20 h-20 object-cover rounded cursor-pointer"
+                                  onClick={() => setPopupImage(documents.selfie)}
+                                />
+                              )}
+                              {documents?.vehicle_photos?.map((url, i) => (
+                                <img
+                                  key={i}
+                                  src={url}
+                                  alt={`Vehicle ${i + 1}`}
+                                  className="w-20 h-20 object-cover rounded cursor-pointer"
+                                  onClick={() => setPopupImage(url)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                </td>
-                <td
-                  className={`p-3 border-b font-medium ${
-                    p.status === "approved"
-                      ? "text-green-600"
-                      : p.status === "rejected"
-                      ? "text-red-600"
-                      : "text-gray-600"
-                  }`}
-                >
-                  {p.status}
-                </td>
-                <td className="p-3 border-b">
-                  {new Date(p.created_at).toLocaleDateString()}
-                </td>
-                <td className="p-3 border-b text-center">
-                  {p.status === "pending" ? (
-                    <>
-                      <button
-                        onClick={() => {
-                          setSelectedId(p.id);
-                          setConfirmAction("approve");
-                        }}
-                        className="px-3 py-1 mr-2 rounded bg-green-500 text-white hover:bg-green-600"
-                      >
-                        Одобрить
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedId(p.id);
-                          setConfirmAction("reject");
-                        }}
-                        className="px-3 py-1 mr-2 rounded bg-red-500 text-white hover:bg-red-600"
-                      >
-                        Отклонить
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setSelectedId(p.id);
-                        setConfirmAction("delete");
-                      }}
-                      className="px-3 py-1 rounded bg-gray-400 text-white hover:bg-gray-500"
-                    >
-                      Удалить профиль
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+                </>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* Popup фото */}
+      {popupImage && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
+          onClick={() => setPopupImage(null)}
+        >
+          <div
+            className="relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={popupImage}
+              alt="Document"
+              className="max-w-[90vw] max-h-[80vh] rounded shadow-lg"
+            />
+            <button
+              onClick={() => setPopupImage(null)}
+              className="absolute top-2 right-2 bg-white text-black rounded-full p-2"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Popup подтверждения */}
       {confirmAction && (

@@ -1,8 +1,10 @@
+/* eslint-disable @next/next/no-html-link-for-pages */
 import { useState } from 'react'                            // React-хук состояния
 import { supabase } from '../lib/supabase'                  // Supabase клиент
 import { useRouter } from 'next/router'                     // Хук для редиректа
+import withGuestRedirect from "../components/withGuestRedirect"
 
-export default function LoginPage() {
+  function LoginPage() {
   const router = useRouter()                                // Инициализируем роутер
   const [email, setEmail] = useState('')                    // Email
   const [password, setPassword] = useState('')              // Пароль
@@ -78,11 +80,11 @@ export default function LoginPage() {
           >
             Войти
           </button>
-          <div className="text-center mt-4">
-  <a href="/forgot-password" className="text-sm text-green-600 hover:underline">
-    Забыли пароль?
-  </a>
-</div>
+                <div className="text-center mt-4">
+        <a href="/forgot-password" className="text-sm text-green-600 hover:underline">
+          Забыли пароль?
+        </a>
+      </div>
 
         </form>
 
@@ -100,3 +102,6 @@ export default function LoginPage() {
     </div>
   )
 }
+
+export default withGuestRedirect(LoginPage);
+ 
