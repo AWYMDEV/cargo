@@ -3,6 +3,9 @@ import Layout from "../components/Layout";       // Компонент-обёр�
 import Header from "../components/header";       // Просто импорт, если понадобится
 import { useEffect } from "react";               // Нужно для хука
 import { useRouter } from "next/router";         // Для редиректа
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
@@ -16,12 +19,16 @@ export default function App({ Component, pageProps }) {
       if (hash.includes("type=recovery")) {
         router.replace("/reset-password" + hash);  // Сохраняем токен в хеше
       }
+   
+   
     }
   }, [router]);
 
   return (
     <Layout>
       <Component {...pageProps} /> {/* Контент текущей страницы */}
+       <ToastContainer position="top-center" autoClose={3000} />
     </Layout>
+    
   );
 }

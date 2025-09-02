@@ -1,332 +1,308 @@
+// components/roleProfilesTable.jsx
+// Профили (Carrier + Shipper) с раскрытием, попапом документов и модерацией.
+// Быстрая загрузка: 2 запроса в параллели (Promise.all). Без JOIN.
+// Кнопки "Одобрить/Отклонить" показываются ТОЛЬКО при status="pending".
+
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import PopupConfirm from "./PopupConfirm";
 
-const RoleProfilesTable = () => {
+// ——— утилита: безопасно приводим documents_url к массиву ссылок ———
+function normalizeDocs(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    // просто строка-ссылка
+    return [raw];
+  }
+}
+
+export default function RoleProfilesTable() {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [popupImage, setPopupImage] = useState(null);
 
-  const [filterRole, setFilterRole] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
+  // ====== ЗАГРУЗКА ДАННЫХ (БЫСТРО) ======
+useEffect(() => {
+  async function fetchProfiles() {
+    setLoading(true); // показываем лоадер
 
-  const [sortField, setSortField] = useState("created_at");
-  const [sortOrder, setSortOrder] = useState("desc");
+    // ⚡ ПАРАЛЛЕЛЬНО 2 запроса
+    const [carrierRes, shipperRes] = await Promise.all([
+      supabase
+        .from("carrier_profiles")
+        .select(`
+          *,
+          carrier_documents (
+            id,
+            file_url,
+            file_name
+          )
+        `)
+        .order("created_at", { ascending: false }),
 
-  const [confirmAction, setConfirmAction] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
+      supabase
+        .from("shipper_profiles")
+        .select("*")
+        .order("created_at", { ascending: false }),
+    ]);
 
-  const [expandedRow, setExpandedRow] = useState(null); // раскрытая строка
-  const [popupImage, setPopupImage] = useState(null); // для увеличенного фото
+    if (carrierRes.error) console.error("carrier err:", carrierRes.error);
+    if (shipperRes.error) console.error("shipper err:", shipperRes.error);
 
-  // Загрузка данных
-  const fetchProfiles = async () => {
-    const { data, error } = await supabase.from("profiles_full_view").select("*");
-    if (!error) setProfiles(data);
-    setLoading(false);
-  };
+    const carriers = (carrierRes.data || []).map((c) => ({
+      id: c.id,
+      role: "Carrier",
+      email: "-", // Email добавим позже через JOIN с users
+      full_name: c.full_name || "",
+      company_name: c.company_name || "",
+      phone: c.phone || "",
+      status: c.status || "pending",
+      created_at: c.created_at || null,
+      truck_type: c.truck_type || "",
+      mc_number: c.mc_number || "",
+      usdot_number: c.usdot_number || "",
+      operating_states: c.operating_states || c.operating_state || "",
+      documents: c.carrier_documents || [], // ⬅️ полученные документы
+      documents_url: normalizeDocs(c.documents_url), // fallback
+      description: "",
+      cargo_types: "",
+      address: "",
+      is_individual: null,
+    }));
 
-  // Обновление статуса
-  const updateStatus = async (status) => {
-    await supabase.from("role_profiles").update({ status }).eq("id", selectedId);
-    setConfirmAction(null);
-    setSelectedId(null);
-    fetchProfiles();
-  };
+    const shippers = (shipperRes.data || []).map((s) => ({
+      id: s.id,
+      role: "Shipper",
+      email: "-",
+      full_name: s.full_name || "",
+      company_name: s.company_name || "",
+      phone: s.phone || "",
+      status: s.status || "pending",
+      created_at: s.created_at || null,
+      truck_type: "",
+      mc_number: "",
+      usdot_number: "",
+      operating_states: "",
+      documents: [], // для shipper пока нет документов
+      documents_url: normalizeDocs(s.documents_url),
+      description: s.description || "",
+      cargo_types: s.cargo_types || "",
+      address: s.address || "",
+      is_individual: s.is_individual,
+    }));
 
-  // Удаление профиля
-  const deleteProfile = async () => {
-    await supabase.from("role_profiles").delete().eq("id", selectedId);
-    setConfirmAction(null);
-    setSelectedId(null);
-    fetchProfiles();
-  };
+    const all = [...carriers, ...shippers]; // объединяем
+    setProfiles(all); // сохраняем
+    setLoading(false); // убираем лоадер
+  }
 
-  // Сортировка
-  const sortedProfiles = [...profiles]
-    .filter((p) => (filterRole === "all" ? true : p.role === filterRole))
-    .filter((p) => (filterStatus === "all" ? true : p.status === filterStatus))
-    .sort((a, b) => {
-      if (sortField === "full_name") {
-        return sortOrder === "asc"
-          ? a.full_name.localeCompare(b.full_name)
-          : b.full_name.localeCompare(a.full_name);
-      }
-      if (sortField === "created_at") {
-        return sortOrder === "asc"
-          ? new Date(a.created_at) - new Date(b.created_at)
-          : new Date(b.created_at) - new Date(a.created_at);
-      }
-      return 0;
-    });
+  fetchProfiles(); // вызов на старте
+}, []);
 
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortOrder("asc");
+
+  // ====== смена статуса (approve/reject) ======
+  async function updateStatus(profileId, role, newStatus) {
+    const table = role === "Carrier" ? "carrier_profiles" : "shipper_profiles";
+
+    const confirmMsg =
+      newStatus === "approved" ? "Одобрить профиль?" : "Отклонить профиль?";
+    if (!window.confirm(confirmMsg)) return;
+
+    // оптимистичное обновление
+    setProfiles((prev) =>
+      prev.map((p) => (p.id === profileId ? { ...p, status: newStatus } : p))
+    );
+
+    const { error } = await supabase
+      .from(table)
+      .update({ status: newStatus })
+      .eq("id", profileId);
+
+    if (error) {
+      // откат + сообщение
+      setProfiles((prev) =>
+        prev.map((p) => (p.id === profileId ? { ...p, status: "pending" } : p))
+      );
+      alert(`Не удалось обновить статус: ${error.message}`);
     }
+  }
+
+  const toggleRow = (id) => {
+    setExpandedRow((prev) => (prev === id ? null : id));
   };
 
-  useEffect(() => {
-    fetchProfiles();
-  }, []);
-
-  if (loading) return <p className="text-gray-600 text-center py-6">Загрузка...</p>;
-
-  // Парсим JSON документов (с защитой от null)
-  const parseDocuments = (docStr) => {
-    if (!docStr) return {};
-    try {
-      return JSON.parse(docStr);
-    } catch {
-      return {};
-    }
-  };
+  if (loading) {
+    return (
+      <div className="text-sm text-gray-500 p-3">Загрузка профилей…</div>
+    );
+  }
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-4 text-[#006BFF]">📄 Профили ролей</h2>
-
-      {/* Фильтры */}
-      <div className="flex gap-4 mb-4">
-        <select
-          value={filterRole}
-          onChange={(e) => setFilterRole(e.target.value)}
-          className="border rounded px-3 py-2"
-        >
-          <option value="all">Все роли</option>
-          <option value="shipper">Shipper</option>
-          <option value="carrier">Carrier</option>
-          <option value="broker">Broker</option>
-        </select>
-
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="border rounded px-3 py-2"
-        >
-          <option value="all">Все статусы</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-        </select>
-      </div>
-
-      {/* Таблица */}
+    <>
       <div className="overflow-x-auto rounded-lg shadow">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-[#006BFF] text-white">
-              <th className="p-3 text-left w-12">№</th>
-              <th className="p-3 text-left w-28">Роль</th>
-              <th
-                className="p-3 text-left w-56 cursor-pointer"
-                onClick={() => handleSort("full_name")}
-              >
-                Имя {sortField === "full_name" && (sortOrder === "asc" ? "↑" : "↓")}
-              </th>
-              <th className="p-3 text-left w-40">Email</th>
-              <th className="p-3 text-left w-32">Телефон</th>
-              <th className="p-3 text-left w-32">Компания</th>
-              <th
-                className="p-3 text-left w-32 cursor-pointer"
-                onClick={() => handleSort("created_at")}
-              >
-                Дата создания{" "}
-                {sortField === "created_at" && (sortOrder === "asc" ? "↑" : "↓")}
-              </th>
-              <th className="p-3 text-left w-28">Статус</th>
-              <th className="p-3 text-center w-40">Действия</th>
+        <table className="min-w-full text-sm text-left border border-gray-200 bg-white">
+          <thead className="bg-blue-600 text-white">
+            <tr>
+              <th className="p-3">№</th>
+              <th className="p-3">Роль</th>
+              <th className="p-3">Имя / Компания</th>
+              <th className="p-3">Email</th>
+              <th className="p-3">Телефон</th>
+              <th className="p-3">Статус</th>
+              <th className="p-3">Дата регистрации</th>
+              <th className="p-3">Действия</th>
             </tr>
           </thead>
+
           <tbody>
-            {sortedProfiles.map((p, index) => {
-              const documents = parseDocuments(p.documents_url);
-
-              return (
-                <>
-                  <tr
-                    key={p.id}
-                    className={`cursor-pointer ${
-                      index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                    } hover:bg-gray-100`}
-                    onClick={() =>
-                      setExpandedRow(expandedRow === p.id ? null : p.id)
-                    }
-                  >
-                    <td className="p-3 border-b text-center">{index + 1}</td>
-                    <td className="p-3 border-b capitalize">{p.role}</td>
-                    <td className="p-3 border-b">{p.full_name}</td>
-                    <td className="p-3 border-b">{p.email}</td>
-                    <td className="p-3 border-b">{p.phone || "—"}</td>
-                    <td className="p-3 border-b">{p.company_name || "—"}</td>
-                    <td className="p-3 border-b">
-                      {new Date(p.created_at).toLocaleDateString()}
-                    </td>
-                    <td
-                      className={`p-3 border-b font-medium ${
-                        p.status === "approved"
-                          ? "text-green-600"
-                          : p.status === "rejected"
-                          ? "text-red-600"
-                          : "text-gray-600"
-                      }`}
-                    >
-                      {p.status}
-                    </td>
-                    <td className="p-3 border-b text-center">
-                      {p.status === "pending" ? (
-                        <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedId(p.id);
-                              setConfirmAction("approve");
-                            }}
-                            className="px-3 py-1 mr-2 rounded bg-green-500 text-white hover:bg-green-600"
-                          >
-                            Одобрить
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedId(p.id);
-                              setConfirmAction("reject");
-                            }}
-                            className="px-3 py-1 mr-2 rounded bg-red-500 text-white hover:bg-red-600"
-                          >
-                            Отклонить
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedId(p.id);
-                            setConfirmAction("delete");
-                          }}
-                          className="px-3 py-1 rounded bg-gray-400 text-white hover:bg-gray-500"
-                        >
-                          Удалить
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-
-                  {/* Раскрытая строка */}
-                  {expandedRow === p.id && (
-                    <tr>
-                      <td colSpan="9" className="p-4 bg-gray-100 border">
-                        <div className="grid grid-cols-2 gap-4">
-                          {/* Текстовые данные */}
-                          <div>
-                            <h3 className="font-bold mb-2">Детали профиля</h3>
-                            <p><b>USDOT:</b> {documents?.usd_ot_number || "-"}</p>
-                            <p><b>MC Number:</b> {documents?.mc_number || "-"}</p>
-                            <p><b>Лицензия:</b> {documents?.license || "-"}</p>
-                          </div>
-
-                          {/* Фото */}
-                          <div>
-                            <h3 className="font-bold mb-2">Документы</h3>
-                            <div className="flex gap-2 flex-wrap">
-                              {documents?.passport_front && (
-                                <img
-                                  src={documents.passport_front}
-                                  alt="Passport Front"
-                                  className="w-20 h-20 object-cover rounded cursor-pointer"
-                                  onClick={() => setPopupImage(documents.passport_front)}
-                                />
-                              )}
-                              {documents?.passport_back && (
-                                <img
-                                  src={documents.passport_back}
-                                  alt="Passport Back"
-                                  className="w-20 h-20 object-cover rounded cursor-pointer"
-                                  onClick={() => setPopupImage(documents.passport_back)}
-                                />
-                              )}
-                              {documents?.selfie && (
-                                <img
-                                  src={documents.selfie}
-                                  alt="Selfie"
-                                  className="w-20 h-20 object-cover rounded cursor-pointer"
-                                  onClick={() => setPopupImage(documents.selfie)}
-                                />
-                              )}
-                              {documents?.vehicle_photos?.map((url, i) => (
-                                <img
-                                  key={i}
-                                  src={url}
-                                  alt={`Vehicle ${i + 1}`}
-                                  className="w-20 h-20 object-cover rounded cursor-pointer"
-                                  onClick={() => setPopupImage(url)}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              );
-            })}
+            {profiles.map((p, idx) => (
+              <Row
+                key={`${p.role}-${p.id}`}
+                index={idx}
+                profile={p}
+                expanded={expandedRow === p.id}
+                onToggle={() => toggleRow(p.id)}
+                onOpenImage={setPopupImage}
+                onChangeStatus={updateStatus}
+              />
+            ))}
           </tbody>
         </table>
       </div>
 
-      {/* Popup фото */}
+      {/* Попап документа */}
       {popupImage && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
           onClick={() => setPopupImage(null)}
         >
-          <div
-            className="relative"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
             <img
               src={popupImage}
-              alt="Document"
-              className="max-w-[90vw] max-h-[80vh] rounded shadow-lg"
+              alt="Документ"
+              className="max-w-[90vw] max-h-[80vh] rounded shadow-xl"
             />
             <button
               onClick={() => setPopupImage(null)}
-              className="absolute top-2 right-2 bg-white text-black rounded-full p-2"
+              className="absolute top-2 right-2 bg-white/90 text-black rounded-full px-3 py-1"
             >
               ✕
             </button>
           </div>
         </div>
       )}
-
-      {/* Popup подтверждения */}
-      {confirmAction && (
-        <PopupConfirm
-          message={
-            confirmAction === "approve"
-              ? "Подтвердить профиль?"
-              : confirmAction === "reject"
-              ? "Отклонить профиль?"
-              : "Удалить профиль?"
-          }
-          onConfirm={() =>
-            confirmAction === "approve"
-              ? updateStatus("approved")
-              : confirmAction === "reject"
-              ? updateStatus("rejected")
-              : deleteProfile()
-          }
-          onCancel={() => {
-            setConfirmAction(null);
-            setSelectedId(null);
-          }}
-        />
-      )}
-    </div>
+    </>
   );
-};
+}
 
-export default RoleProfilesTable;
+// ——— компонент строки таблицы + раскрытие ———
+function Row({ index, profile, expanded, onToggle, onOpenImage, onChangeStatus }) {
+  const statusColor =
+    profile.status === "approved"
+      ? "text-green-600"
+      : profile.status === "rejected"
+      ? "text-red-600"
+      : "text-gray-700";
+
+  return (
+    <>
+      {/* основная строка */}
+      <tr className="border-b hover:bg-gray-50">
+        <td className="p-3">{index + 1}</td>
+        <td className="p-3">{profile.role}</td>
+        <td className="p-3">{profile.company_name || profile.full_name || "—"}</td>
+        <td className="p-3">{profile.email}</td>
+        <td className="p-3">{profile.phone || "—"}</td>
+        <td className={`p-3 font-semibold ${statusColor}`}>{profile.status}</td>
+        <td className="p-3">
+          {profile.created_at ? new Date(profile.created_at).toLocaleDateString() : "—"}
+        </td>
+        <td className="p-3">
+          <button onClick={onToggle} className="text-blue-600 hover:underline">
+            {expanded ? "Скрыть" : "Детали"}
+          </button>
+        </td>
+      </tr>
+
+      {/* раскрытая */}
+      {expanded && (
+        <tr className="bg-gray-50">
+          <td colSpan={8} className="p-4">
+            <div className="grid grid-cols-2 gap-6">
+              {/* левая колонка — данные */}
+              <div className="space-y-2 text-sm">
+                <p><b>Имя:</b> {profile.full_name || "—"}</p>
+                <p><b>Компания:</b> {profile.company_name || "—"}</p>
+
+                {profile.role === "Carrier" ? (
+                  <>
+                    <p><b>Truck Type:</b> {profile.truck_type || "—"}</p>
+                    <p><b>MC Number:</b> {profile.mc_number || "—"}</p>
+                    <p><b>USDOT:</b> {profile.usdot_number || "—"}</p>
+                    <p><b>Operating States:</b> {profile.operating_states || "—"}</p>
+                  </>
+                ) : (
+                  <>
+                    <p><b>Описание:</b> {profile.description || "—"}</p>
+                    <p><b>Типы грузов:</b> {profile.cargo_types || "—"}</p>
+                    <p><b>Адрес:</b> {profile.address || "—"}</p>
+                    <p>
+                      <b>Физ. лицо:</b>{" "}
+                      {profile.is_individual === null
+                        ? "—"
+                        : profile.is_individual
+                        ? "Да"
+                        : "Нет"}
+                    </p>
+                  </>
+                )}
+
+                {/* кнопки модерации — только если pending */}
+                {profile.status === "pending" && (
+                  <div className="pt-3 flex gap-2">
+                    <button
+                      onClick={() => onChangeStatus(profile.id, profile.role, "approved")}
+                      className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+                    >
+                      Одобрить
+                    </button>
+                    <button
+                      onClick={() => onChangeStatus(profile.id, profile.role, "rejected")}
+                      className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* правая колонка — документы */}
+              <div>
+                <h4 className="font-semibold mb-2">Документы</h4>
+                {profile.documents_url && profile.documents_url.length > 0 ? (
+                  <div className="flex gap-2 flex-wrap">
+                    {profile.documents_url.map((url, i) => (
+                      <img
+                        key={i}
+                        src={url}
+                        alt={`doc-${i}`}
+                        className="w-24 h-24 object-cover rounded border cursor-pointer"
+                        onClick={() => onOpenImage(url)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600">Документы не загружены</p>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
