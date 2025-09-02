@@ -1,7 +1,7 @@
 // pages/admin/index.jsx
 
-import AdminLayout from "../../components/adminLayout";
-import AdminTabs from "../../components/AdminTabs";
+import AdminLayout from "../../components/adminLayOut";
+import AdminTabs from "../../components/adminTabs";
 import withAdminAuth from "../../components/withAdminAuth"; // ⬅️ импорт защиты
 
 function AdminHomePage() {

@@ -1,5 +1,5 @@
 import "@/styles/globals.css";                   // Подключение глобальных стилей
-import Layout from "../components/Layout";       // Компонент-обёртка
+import Layout from "../components/layout";       // Компонент-обёртка
 import Header from "../components/header";       // Просто импорт, если понадобится
 import { useEffect } from "react";               // Нужно для хука
 import { useRouter } from "next/router";         // Для редиректа
