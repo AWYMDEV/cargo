@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 // 📄 Файл: /pages/onboarding/profile.js
 
 import { useState, useEffect } from 'react'

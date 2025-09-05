@@ -1,6 +1,6 @@
 // components/AdminTabs.jsx
 import RoleRequestsTable from "./roleRequestsTable"; // таблица заявок на роли
-import RoleProfilesTable from "./RoleProfilesTable"; // НОВАЯ таблица профилей
+import RoleProfilesTable from "./roleProfilesTable"; // НОВАЯ таблица профилей
 import { useState } from "react"; // хук состояния
 
 const AdminTabs = () => {

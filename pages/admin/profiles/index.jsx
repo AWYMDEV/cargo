@@ -1,7 +1,7 @@
 // pages/admin/profiles/index.jsx
 
 import withAdminAuth from "@/components/withAdminAuth"; // 🔐 Проверка на админа
-import AdminLayout from "@/components/adminLayout"; // 🧱 Общий Layout для админки
+import AdminLayout from "@/components/adminLayOut"; // 🧱 Общий Layout для админки
 import RoleProfilesTable from "@/components/roleProfilesTable"; // 📊 Компонент таблицы профилей
 
 function AdminProfilesPage() {
