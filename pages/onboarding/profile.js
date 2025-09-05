@@ -23,7 +23,7 @@ export default function CarrierOnboarding() {
 
   const [documents, setDocuments] = useState([])
   const [profileCompleted, setProfileCompleted] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(null) // от 0 до 100
+  const [uploadProgress, setUploadProgress] = useState(null)
 
   const truckTypes = ['Flatbed', 'Dry Van', 'Reefer', 'Step Deck', 'Box Truck', 'Power Only', 'Hotshot', 'Tanker']
 
@@ -35,77 +35,111 @@ export default function CarrierOnboarding() {
     }))
   }
 
+  useEffect(() => {
+    fetchDocuments()
+  }, [role])
+
+  const fetchDocuments = async () => {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (!user || error) return;
+
+    const documentsTable = `${role}_documents`;
+    const { data, error: fetchError } = await supabase
+      .from(documentsTable)
+      .select('*')
+      .eq('user_id', user.id)
+      .order('uploaded_at', { ascending: false });
+
+    if (!fetchError && data) {
+      setDocuments(data);
+    }
+  }
+
   const handleFileChange = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Показываем прогресс 0 перед началом
+    if (documents.length >= 5) {
+      toast.error('Можно загрузить не более 5 файлов');
+      return;
+    }
+
     setUploadProgress(0);
 
     try {
-      // Получаем текущего пользователя
-      const {
-        data: { user },
-        error: userError
-      } = await supabase.auth.getUser();
-
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        alert('Вы не авторизованы');
+        toast.error('Ошибка авторизации');
         return;
       }
 
-      // Генерация имени файла: [роль]_[email]_[timestamp].[ext]
-            // Проверяем, есть ли имя пользователя в user_metadata
       const userName = user.user_metadata?.full_name || 'anonymous';
-
-      // Очищаем имя от пробелов, символов и делаем в нижнем регистре
       const sanitizedName = userName.trim().toLowerCase().replace(/\s+/g, '_');
       const timestamp = Date.now();
       const extension = file.name.split('.').pop();
       const fileName = `${role}_${sanitizedName}_${timestamp}.${extension}`;
       const filePath = `${fileName}`;
 
-      // Загрузка файла в Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-       .from(`${role}-documents`)  // ← ✅ автоматический выбор бакета
-        .upload(filePath, file);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from(`${role}-documents`)
+          .upload(filePath, file);
 
-      if (uploadError) {
-        console.error('Ошибка загрузки файла:', uploadError);
-        alert('Ошибка при загрузке файла');
-        return;
-      }
+        if (uploadError) {
+          toast.error('Ошибка при загрузке файла');
+          return;
+        }
 
-      // Вставка записи в таблицу carrier_documents или shipper_documents
-      const documentsTable = `${role}_documents`;
-      const insertRes = await supabase.from(documentsTable).insert({
-        user_id: user.id,
-        filename: fileName,
-        path: filePath,
-        uploaded_at: new Date().toISOString(),
-        bucket: 'truck-documents'
-      });
+        const insertRes = await supabase.from(`${role}_documents`).insert({
+          user_id: user.id,
+          filename: fileName,
+          path: filePath,
+          uploaded_at: new Date().toISOString(),
+          bucket: `${role}-documents`
+        });
 
-      if (insertRes.error) {
-        console.error('Ошибка при записи в таблицу:', insertRes.error);
-        alert('Ошибка при записи файла в базу');
-        return;
-      }
+        if (insertRes.error) {
+          toast.error('Ошибка при записи в базу');
+          return;
+        }
 
-      toast.success('Файл успешно загружен!');
-      setUploadProgress(null);
+        toast.success('Файл успешно загружен!');
+        setUploadProgress(null);
+        fetchDocuments();
+      };
+
+      reader.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          setUploadProgress(percent);
+        }
+      };
+
+      reader.onerror = () => {
+        toast.error('Ошибка при чтении файла');
+        setUploadProgress(null);
+      };
+
+      reader.readAsArrayBuffer(file);
     } catch (err) {
-      console.error('Ошибка во время загрузки:', err);
-      alert('Ошибка при загрузке файла');
+      console.error('Ошибка:', err);
+      toast.error('Ошибка при загрузке');
       setUploadProgress(null);
     }
   }
 
-  const handleRemoveFile = async (index) => {
-    const fileToRemove = documents[index]
-    const { error } = await supabase.storage.from('truck-documents').remove([fileToRemove.path])
-    if (error) return alert('Ошибка удаления файла: ' + error.message)
-    setDocuments((prev) => prev.filter((_, i) => i !== index))
+  const handleRemoveFile = async (fileId, filePath) => {
+    const { error: storageError } = await supabase.storage.from(`${role}-documents`).remove([filePath]);
+    const { error: dbError } = await supabase.from(`${role}_documents`).delete().eq('id', fileId);
+
+    if (storageError || dbError) {
+      toast.error('Ошибка удаления файла');
+      return;
+    }
+
+    toast.success('Файл удалён');
+    fetchDocuments();
   }
 
   const handleSubmit = async () => {
@@ -210,31 +244,35 @@ export default function CarrierOnboarding() {
       <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} className="block mb-4" />
 
       {uploadProgress !== null && (
-        <div className="text-sm text-blue-600 mt-2">
-          Загрузка файла: {uploadProgress}%
+        <div className="w-full bg-gray-200 rounded-full h-4 mb-4 overflow-hidden">
+          <div
+            className="bg-blue-600 h-full text-white text-sm flex items-center justify-center transition-all duration-300 ease-in-out"
+            style={{ width: `${uploadProgress}%` }}
+          >
+            {uploadProgress}%
+          </div>
         </div>
       )}
 
       <ul className="text-sm text-gray-700 mb-4">
-        {documents.map((doc, idx) => (
-          <li key={idx} className="flex justify-between items-center mb-1">
-            <span>📄 {doc.name}</span>
-            <button onClick={() => handleRemoveFile(idx)} className="text-red-600 hover:underline text-xs">Удалить</button>
+        {documents.map((doc) => (
+          <li key={doc.id} className="flex justify-between items-center mb-1">
+            <span>📄 {doc.filename}</span>
+            <button onClick={() => handleRemoveFile(doc.id, doc.path)} className="text-red-600 hover:underline text-xs">Удалить</button>
           </li>
         ))}
       </ul>
 
       {!profileCompleted && (
-        <button className="bg-green-700 text-white px-4 py-2 rounded" onClick={handleSubmit}>
+        <button className="bg-blue-700 text-white px-4 py-2 rounded" onClick={handleSubmit}>
           Отправить заявку
         </button>
       )}
 
-      {/* ✅ Успешный попап */}
       {profileCompleted && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm text-center">
-            <div className="text-green-600 text-4xl mb-4">✔</div>
+            <div className="text-blue-600 text-4xl mb-4">✔</div>
             <p className="text-lg font-semibold mb-2">Данные успешно отправлены</p>
             <p className="text-sm text-gray-600">Проверьте почту и ожидайте подтверждения.</p>
           </div>
