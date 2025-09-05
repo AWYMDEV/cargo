@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import PopupConfirm from "./PopupConfirm";
+import PopupConfirm from "./popupConfirm";
 
 const RoleProfilesTable = () => {
   const [profiles, setProfiles] = useState([]);
